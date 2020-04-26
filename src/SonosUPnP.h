@@ -22,16 +22,19 @@
 
 //#define SONOS_WRITE_ONLY_MODE
 
-#include <Arduino.h>
-#if (defined(__AVR__))
-  #include <avr/pgmspace.h>
-#else
-  #include <pgmspace.h>
-#endif
+#include "Arduino.h"
+//#include "avr/pgmspace.h"
+#include "pgmspace.h"
 #ifndef SONOS_WRITE_ONLY_MODE
-#include "../../MicroXPath/src/MicroXPath_P.h"
+#include "MicroXPath_P.h"
 #endif
-#include "../../Ethernet/src/EthernetClient.h"
+#if defined(__AVR__)
+#include <WiFi.h>
+#elif defined(ESP8266)
+#include <ESP8266WiFi.h>
+#else
+#include <WiFi.h>
+#endif
 
 // HTTP:
 #define HTTP_VERSION " HTTP/1.1\n"
@@ -122,6 +125,10 @@
 
 #define SONOS_TAG_SET_LED_STATE "SetLEDState"
 #define SONOS_TAG_DESIRED_LED_STATE "DesiredLEDState"
+
+//Added by jan for sleep timer control
+#define SONOS_TAG_CONFIGURE_SLEEP_TIMER "ConfigureSleepTimer"
+#define SONOS_TAG_NEW_SLEEP_TIMER_DURATION "NewSleepTimerDuration"
 
 // Playlist & Queue
 /*
@@ -269,47 +276,49 @@
 
 struct TrackInfo
 {
-  uint16_t number;
-  uint32_t duration;
-  uint32_t position;
-  char *uri;
+    uint16_t number;
+    uint32_t duration;
+    uint32_t position;
+    char* uri;
 };
 
 class SonosUPnP
 {
 
-  public:
+public:
 
-    SonosUPnP(EthernetClient client, void (*ethernetErrCallback)(void));
+    SonosUPnP(WiFiClient client, void (*ethernetErrCallback)(void));
 
-    void setAVTransportURI(IPAddress speakerIP, const char *scheme, const char *address);
+    void setAVTransportURI(IPAddress speakerIP, const char* scheme, const char* address);
     void seekTrack(IPAddress speakerIP, uint16_t index);
     void seekTime(IPAddress speakerIP, uint8_t hour, uint8_t minute, uint8_t second);
     void setPlayMode(IPAddress speakerIP, uint8_t playMode);
     void play(IPAddress speakerIP);
-    void playFile(IPAddress speakerIP, const char *path);
-    void playHttp(IPAddress speakerIP, const char *address);
-    void playRadio(IPAddress speakerIP, const char *address, const char *title);
-    void playLineIn(IPAddress speakerIP, const char *speakerID);
-    void playQueue(IPAddress speakerIP, const char *speakerID);
-    void playConnectToMaster(IPAddress speakerIP, const char *masterSpeakerID);
+    void playFile(IPAddress speakerIP, const char* path);
+    void playHttp(IPAddress speakerIP, const char* address);
+    void playRadio(IPAddress speakerIP, const char* address, const char* title);
+    void playLineIn(IPAddress speakerIP, const char* speakerID);
+    void playQueue(IPAddress speakerIP, const char* speakerID);
+    void playConnectToMaster(IPAddress speakerIP, const char* masterSpeakerID);
     void disconnectFromMaster(IPAddress speakerIP);
     void stop(IPAddress speakerIP);
     void pause(IPAddress speakerIP);
     void skip(IPAddress speakerIP, uint8_t direction);
     void setMute(IPAddress speakerIP, bool state);
     void setVolume(IPAddress speakerIP, uint8_t volume);
-    void setVolume(IPAddress speakerIP, uint8_t volume, const char *channel);
+    void setVolume(IPAddress speakerIP, uint8_t volume, const char* channel);
     void setBass(IPAddress speakerIP, int8_t bass);
     void setTreble(IPAddress speakerIP, int8_t treble);
     void setLoudness(IPAddress speakerIP, bool state);
     void setStatusLight(IPAddress speakerIP, bool state);
     void addPlaylistToQueue(IPAddress speakerIP, uint16_t playlistIndex);
-    void addTrackToQueue(IPAddress speakerIP, const char *scheme, const char *address);
+    void addTrackToQueue(IPAddress speakerIP, const char* scheme, const char* address);
     void removeAllTracksFromQueue(IPAddress speakerIP);
-    
-    #ifndef SONOS_WRITE_ONLY_MODE
-    
+    //NEU DURCH JAN!!
+    void NewSleepTimerDuration(IPAddress speakerIP, uint8_t hour, uint8_t minute, uint8_t second);
+
+#ifndef SONOS_WRITE_ONLY_MODE
+
     void setRepeat(IPAddress speakerIP, bool repeat);
     void setShuffle(IPAddress speakerIP, bool shuffle);
     void toggleRepeat(IPAddress speakerIP);
@@ -321,52 +330,61 @@ class SonosUPnP
     uint8_t getPlayMode(IPAddress speakerIP);
     bool getRepeat(IPAddress speakerIP);
     bool getShuffle(IPAddress speakerIP);
-    TrackInfo getTrackInfo(IPAddress speakerIP, char *uriBuffer, size_t uriBufferSize);
+    TrackInfo getTrackInfo(IPAddress speakerIP, char* uriBuffer, size_t uriBufferSize);
     uint16_t getTrackNumber(IPAddress speakerIP);
-    void getTrackURI(IPAddress speakerIP, char *resultBuffer, size_t resultBufferSize);
+    void getTrackURI(IPAddress speakerIP, char* resultBuffer, size_t resultBufferSize);
     uint8_t getSource(IPAddress speakerIP);
-    uint8_t getSourceFromURI(const char *uri);
+    uint8_t getSourceFromURI(const char* uri);
     uint32_t getTrackDurationInSeconds(IPAddress speakerIP);
     uint32_t getTrackPositionInSeconds(IPAddress speakerIP);
     uint16_t getTrackPositionPerMille(IPAddress speakerIP);
     bool getMute(IPAddress speakerIP);
     uint8_t getVolume(IPAddress speakerIP);
-    uint8_t getVolume(IPAddress speakerIP, const char *channel);
+    uint8_t getVolume(IPAddress speakerIP, const char* channel);
     bool getOutputFixed(IPAddress speakerIP);
     int8_t getBass(IPAddress speakerIP);
     int8_t getTreble(IPAddress speakerIP);
     bool getLoudness(IPAddress speakerIP);
-    
-    #endif
 
-  private:
+#endif
 
-    EthernetClient ethClient;
+private:
+
+    WiFiClient ethClient;
 
     void (*ethernetErrCallback)(void);
-    void seek(IPAddress speakerIP, const char *mode, const char *data);
-    void setAVTransportURI(IPAddress speakerIP, const char *scheme, const char *address, PGM_P metaStart_P, PGM_P metaEnd_P, const char *metaValue);
+    void seek(IPAddress speakerIP, const char* mode, const char* data);
+    void setAVTransportURI(IPAddress speakerIP, const char* scheme, const char* address, PGM_P metaStart_P, PGM_P metaEnd_P, const char* metaValue);
     void upnpSet(IPAddress ip, uint8_t upnpMessageType, PGM_P action_P);
-    void upnpSet(IPAddress ip, uint8_t upnpMessageType, PGM_P action_P, const char *field, const char *value);
-    void upnpSet(IPAddress ip, uint8_t upnpMessageType, PGM_P action_P, const char *field, const char *valueA, const char *valueB, PGM_P extraStart_P, PGM_P extraEnd_P, const char *extraValue);
-    bool upnpPost(IPAddress ip, uint8_t upnpMessageType, PGM_P action_P, const char *field, const char *valueA, const char *valueB, PGM_P extraStart_P, PGM_P extraEnd_P, const char *extraValue);
-    const char *getUpnpService(uint8_t upnpMessageType);
-    const char *getUpnpEndpoint(uint8_t upnpMessageType);
-    void ethClient_write(const char *data);
-    void ethClient_write_P(PGM_P data_P, char *buffer, size_t bufferSize);
+    void upnpSet(IPAddress ip, uint8_t upnpMessageType, PGM_P action_P, const char* field, const char* value);
+    void upnpSet(IPAddress ip, uint8_t upnpMessageType, PGM_P action_P, const char* field, const char* valueA, const char* valueB, PGM_P extraStart_P, PGM_P extraEnd_P, const char* extraValue);
+    bool upnpPost(IPAddress ip, uint8_t upnpMessageType, PGM_P action_P, const char* field, const char* valueA, const char* valueB, PGM_P extraStart_P, PGM_P extraEnd_P, const char* extraValue);
+    const char* getUpnpService(uint8_t upnpMessageType);
+    const char* getUpnpEndpoint(uint8_t upnpMessageType);
+    void ethClient_write(const char* data);
+    void ethClient_write_P(PGM_P data_P, char* buffer, size_t bufferSize);
     void ethClient_stop();
 
-    #ifndef SONOS_WRITE_ONLY_MODE
+#ifndef SONOS_WRITE_ONLY_MODE
 
     MicroXPath_P xPath;
-    void ethClient_xPath(PGM_P *path, uint8_t pathSize, char *resultBuffer, size_t resultBufferSize);
-    void upnpGetString(IPAddress speakerIP, uint8_t upnpMessageType, PGM_P action_P, const char *field, const char *value, PGM_P *path, uint8_t pathSize, char *resultBuffer, size_t resultBufferSize);
-    uint32_t getTimeInSeconds(const char *time);
+    void ethClient_xPath(PGM_P* path, uint8_t pathSize, char* resultBuffer, size_t resultBufferSize);
+    void upnpGetString(IPAddress speakerIP, uint8_t upnpMessageType, PGM_P action_P, const char* field, const char* value, PGM_P* path, uint8_t pathSize, char* resultBuffer, size_t resultBufferSize);
+    uint32_t getTimeInSeconds(const char* time);
     uint32_t uiPow(uint16_t base, uint16_t exp);
-    uint8_t convertState(const char *input);
-    uint8_t convertPlayMode(const char *input);
+    uint8_t convertState(const char* input);
+    uint8_t convertPlayMode(const char* input);
 
-    #endif
+#endif
 };
 
 #endif
+
+//#ifdef ESP8266  //has no strlcpy_P
+
+/* size_t ICACHE_FLASH_ATTR strlcpy_P(char* dest, const char* src, size_t size) {
+    const char* read = src;
+    char* write = dest;
+
+*/
+
